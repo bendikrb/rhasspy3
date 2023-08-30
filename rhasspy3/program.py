@@ -42,9 +42,8 @@ class ProcessContextManager(contextlib.AbstractAsyncContextManager):
     async def __aexit__(self, exc_type, exc, tb):
         try:
             if self.proc.returncode is None:
-                # Terminate process gracefully
-                self.proc.stdin.close()
-                await self.proc.wait()
+                self.proc.terminate()
+                await self.proc.communicate()
         except ProcessLookupError:
             # Expected when process has already exited
             pass
