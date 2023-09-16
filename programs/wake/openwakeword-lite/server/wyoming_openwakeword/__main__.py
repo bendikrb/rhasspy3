@@ -39,14 +39,15 @@ async def main() -> None:
     parser.add_argument(
         "--trigger-level",
         type=int,
-        default=4,
+        default=1,
         help="Number of activations before detection (default: 4)",
     )
     #
     parser.add_argument(
-        "--noise-suppression",
-        action="store_true",
-        help="Enable noise suppression with speexdsp",
+        "--noise-suppression", type=int, default=0, choices=(0, 1, 2, 3, 4)
+    )
+    parser.add_argument(
+        "--auto-gain", type=int, default=0, choices=list(range(32))
     )
     #
     parser.add_argument("--output-dir", help="Path to save audio and detections")
@@ -65,7 +66,7 @@ async def main() -> None:
         # Directory to save audio clips and chunk probabilities
         args.output_dir = Path(args.output_dir)
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        _LOGGER.info("Audio and detections will be saved to %s", args.output_dir)
+        _LOGGER.info("Audio will be saved to %s", args.output_dir)
 
     # Resolve wake word model paths
     models_dir = Path(args.models_dir)
@@ -118,13 +119,6 @@ async def main() -> None:
     )
     loop = asyncio.get_running_loop()
 
-    # Start server first to handle info requests
-    server = AsyncServer.from_uri(args.uri)
-    server_task = loop.create_task(
-        server.run(partial(OpenWakeWordEventHandler, wyoming_info, args, state))
-    )
-    _LOGGER.debug("Server started")
-
     # One thread per wake word model
     ww_threads: Dict[str, Thread] = {}
     for model_path in model_paths:
@@ -151,8 +145,11 @@ async def main() -> None:
     embeddings_thread.start()
     _LOGGER.info("Ready")
 
+    # Start server
+    server = AsyncServer.from_uri(args.uri)
+
     try:
-        await server_task
+        await server.run(partial(OpenWakeWordEventHandler, wyoming_info, args, state))
     except KeyboardInterrupt:
         pass
     finally:
